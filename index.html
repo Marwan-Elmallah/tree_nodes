@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Binary Tree Game – Zoom‑aware Nodes + Drag‑to‑Pan</title>
+<style>
+/* --------------------------------------------------------------
+   Page shell
+   -------------------------------------------------------------- */
+body{font-family:Arial,sans-serif;background:#0f172a;color:#e5e7eb;margin:0;}
+.container{display:flex;gap:20px;padding:20px;}
+.panel{background:#020617;padding:16px;border-radius:8px;width:320px;}
+button{margin:4px 0;padding:6px 12px;cursor:pointer;
+       background:#1e293b;color:#e5e7eb;border:none;border-radius:4px;}
+button:hover{background:#334155}
+input,select{width:100%;margin:6px 0;padding:6px;
+            background:#1e293b;color:#e5e7eb;border:none;border-radius:4px}
+.zoom-controls{display:flex;gap:8px;margin-bottom:10px}
+.tree-wrapper{
+  overflow:hidden;                 /* hide scrollbars – we pan instead */
+  transform-origin:top left;
+  transition:transform .2s ease;
+  cursor:grab;                    /* default cursor */
+  user-select:none;               /* avoid text selection while dragging */
+}
+.tree-wrapper.grabbing{cursor:grabbing}
+
+/* --------------------------------------------------------------
+   Tree layout – flexbox (centred root)
+   -------------------------------------------------------------- */
+.tree{
+  display:flex;
+  justify-content:center;
+  margin-top:30px;
+}
+.tree ul{
+  display:flex;
+  justify-content:center;
+  position:relative;
+  padding-top:30px;
+}
+.tree li{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  list-style:none;
+  margin:0 12px;
+  position:relative;
+}
+
+/* connector lines (unchanged) */
+.tree li::before,
+.tree li::after{
+  content:"";
+  position:absolute;
+  top:-15px;
+  width:0;
+  height:15px;
+  border-left:2px solid #64748b;
+}
+.tree li::before{ left:calc(50% - 1px); }
+.tree li::after{  right:calc(50% - 1px); }
+.tree li:only-child::before,
+.tree li:only-child::after{ display:none; }
+.tree ul::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:50%;
+  width:calc(100% - 24px);
+  border-top:2px solid #64748b;
+  transform:translateX(-50%);
+}
+
+/* ---------- NODE STYLES – size driven by CSS variable ---------- */
+:root{--node-size:70px;}               /* default size */
+.node{
+  width:var(--node-size);
+  height:var(--node-size);
+  border-radius:50%;
+  border:2px solid #64748b;
+  background:#020617;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:all .4s ease, width .2s ease, height .2s ease;
+  position:relative;
+}
+.node.active   {background:#16a34a;}
+.node.selected {border:3px solid #22c55e;box-shadow:0 0 12px #22c55e;}
+.points{font-size:11px;margin-top:2px;}
+.tooltip{
+  position:absolute;bottom:-32px;background:#020617;border:1px solid #64748b;
+  padding:3px 6px;font-size:11px;border-radius:4px;display:none;white-space:nowrap;
+}
+.node:hover .tooltip{display:block;}
+.status{margin-top:12px;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- LEFT PANEL – Controls -->
+  <div class="panel">
+    <h3>Actions</h3>
+    <input id="treeName" placeholder="Tree name" />
+    <select id="mode">
+      <option value="single">Single</option>
+      <option value="triple">Triple</option>
+      <option value="vip">VIP</option>
+    </select>
+    <button onclick="addTree()">Transform To Tree</button>
+    <button onclick="activateNode()">Activate Node</button>
+    <button onclick="resetTree()">Reset Tree</button>
+    <p class="status">Selected Node: <strong id="selected">main</strong></p>
+  </div>
+
+  <!-- RIGHT PANEL – Tree view -->
+  <div class="panel" style="flex:1">
+    <h3>Tree</h3>
+    <div class="zoom-controls">
+      <button onclick="zoomIn()">＋</button>
+      <button onclick="zoomOut()">－</button>
+      <button onclick="resetZoom()">Reset</button>
+    </div>
+    <div id="treeWrapper" class="tree-wrapper">
+      <div id="tree" class="tree"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==============================================================
+   1️⃣  DATA MODEL & BASIC HELPERS
+   ============================================================== */
+class TreeNode{
+  constructor(name,parent=null){
+    this.name = name;
+    this.active = false;
+    this.left = null;
+    this.right = null;
+    this.points = 0;               // total points (own + inherited)
+    this.ownPointGiven = false;    // have we already awarded this node its own point?
+    this.parent = parent;          // cached for fast upward walk
+  }
+}
+const root = new TreeNode('main');
+root.active = true;                // root starts active
+let selectedNode = root;
+let zoomLevel = 1;                 // 1 = 100%
+let panX = 0, panY = 0;            // current translate offsets
+
+/* ----- generic recursion ----- */
+function traverse(node,cb){
+  if(!node) return;
+  cb(node);
+  traverse(node.left,cb);
+  traverse(node.right,cb);
+}
+
+/* ----- count active nodes inside a subtree (used for L / R tooltip) ----- */
+function countActive(node){
+  if(!node) return 0;
+  let c = node.active ? 1 : 0;
+  c += countActive(node.left);
+  c += countActive(node.right);
+  return c;
+}
+
+/* --------------------------------------------------------------
+   2️⃣  POINT LOGIC (unchanged from the previous answer)
+   -------------------------------------------------------------- */
+function hasActiveBothSides(node){
+  if(!node) return false;
+  const leftHas  = node.left  && countActive(node.left)  > 0;
+  const rightHas = node.right && countActive(node.right) > 0;
+  return leftHas && rightHas;
+}
+function awardPointAndPropagate(node){
+  node.points += 1;                // own point
+  let anc = node.parent;
+  while(anc && anc.active){
+    anc.points += 1;
+    anc = anc.parent;
+  }
+}
+function activateNodeLogic(node){
+  if(!node || node.active) return;
+  node.active = true;
+  if(!node.ownPointGiven && hasActiveBothSides(node)){
+    node.ownPointGiven = true;
+    awardPointAndPropagate(node);
+  }
+  // ascend and see if any ancestor now qualifies
+  let anc = node.parent;
+  while(anc){
+    if(anc.active && !anc.ownPointGiven && hasActiveBothSides(anc)){
+      anc.ownPointGiven = true;
+      awardPointAndPropagate(anc);
+    }
+    anc = anc.parent;
+  }
+}
+
+/* --------------------------------------------------------------
+   3️⃣  TREE BUILDING
+   -------------------------------------------------------------- */
+function buildChildren(node,name){
+  node.left  = new TreeNode(name,node);
+  node.right = new TreeNode(name,node);
+  node.left.left   = new TreeNode(name,node.left);
+  node.left.right  = new TreeNode(name,node.left);
+  node.right.left  = new TreeNode(name,node.right);
+  node.right.right = new TreeNode(name,node.right);
+}
+
+/* --------------------------------------------------------------
+   4️⃣  MODE HANDLING
+   -------------------------------------------------------------- */
+function activateByMode(tree,mode){
+  if(mode === 'single'){
+    activateNodeLogic(tree);
+  }else if(mode === 'triple'){
+    activateNodeLogic(tree.left);
+    activateNodeLogic(tree.right);
+    activateNodeLogic(tree);
+  }else if(mode === 'vip'){
+    const order = [];
+    (function dfs(n){
+      if(!n) return;
+      dfs(n.left);
+      dfs(n.right);
+      order.push(n);
+    })(tree);
+    order.forEach(activateNodeLogic);
+  }
+}
+
+/* --------------------------------------------------------------
+   5️⃣  UI CALLBACKS (buttons)
+   -------------------------------------------------------------- */
+function addTree(){
+  const name = document.getElementById('treeName').value.trim();
+  const mode = document.getElementById('mode').value;
+  if(!name){ alert('Please type a name'); return; }
+
+  // clear old activation/point data on the branch we replace
+  traverse(selectedNode, n => {
+    n.active = false;
+    n.points = 0;
+    n.ownPointGiven = false;
+  });
+
+  selectedNode.name = name;
+  buildChildren(selectedNode, name);
+  activateByMode(selectedNode, mode);
+  render();
+}
+function activateNode(){
+  activateNodeLogic(selectedNode);
+  render();
+}
+function resetTree(){
+  if(!confirm('Reset the whole tree? All progress will be lost.')) return;
+  root.name = 'main';
+  root.active = true;
+  root.points = 0;
+  root.ownPointGiven = false;
+  root.left = root.right = null;
+  selectedNode = root;
+  document.getElementById('selected').innerText = root.name;
+  render();
+}
+
+/* --------------------------------------------------------------
+   6️⃣  ZOOM & PAN
+   -------------------------------------------------------------- */
+function updateTransform(){
+  const wrapper = document.getElementById('treeWrapper');
+  wrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+}
+function setZoom(v){
+  zoomLevel = v;
+  // shrink / enlarge the circles inversely to keep overall width stable
+  const baseSize = 70;                 // the size we used originally
+  const newSize = baseSize / zoomLevel;
+  document.documentElement.style.setProperty('--node-size', `${newSize}px`);
+  updateTransform();
+}
+function zoomIn(){ setZoom(zoomLevel + 0.1); }
+function zoomOut(){ setZoom(Math.max(0.4, zoomLevel - 0.1)); }
+function resetZoom(){ setZoom(1); }
+
+/* ---- drag‑to‑pan ---- */
+let isPanning = false, startX = 0, startY = 0;
+const wrapper = document.getElementById('treeWrapper');
+
+wrapper.addEventListener('mousedown', e => {
+  isPanning = true;
+  startX = e.clientX - panX;
+  startY = e.clientY - panY;
+  wrapper.classList.add('grabbing');
+});
+window.addEventListener('mousemove', e => {
+  if(!isPanning) return;
+  panX = e.clientX - startX;
+  panY = e.clientY - startY;
+  updateTransform();
+});
+window.addEventListener('mouseup', () => {
+  isPanning = false;
+  wrapper.classList.remove('grabbing');
+});
+window.addEventListener('mouseleave', () => {
+  isPanning = false;
+  wrapper.classList.remove('grabbing');
+});
+
+/* --------------------------------------------------------------
+   7️⃣  RENDERING
+   -------------------------------------------------------------- */
+function renderNode(node){
+  const li = document.createElement('li');
+
+  const div = document.createElement('div');
+  div.className = 'node' +
+    (node.active ? ' active' : '') +
+    (node === selectedNode ? ' selected' : '');
+  div.dataset.name = node.name;
+
+  div.innerHTML = `
+    <strong>${node.name}</strong>
+    <div class="points">⭐ ${node.points}</div>
+  `;
+
+  const leftCnt  = countActive(node.left);
+  const rightCnt = countActive(node.right);
+  const tooltip = document.createElement('div');
+  tooltip.className = 'tooltip';
+  tooltip.innerText = `L:${leftCnt} | R:${rightCnt}`;
+  div.appendChild(tooltip);
+
+  div.onclick = e => {
+    e.stopPropagation();
+    selectedNode = node;
+    document.getElementById('selected').innerText = node.name;
+    render();                     // redraw to highlight the selected node
+  };
+
+  li.appendChild(div);
+
+  if(node.left || node.right){
+    const ul = document.createElement('ul');
+    if(node.left)  ul.appendChild(renderNode(node.left));
+    if(node.right) ul.appendChild(renderNode(node.right));
+    li.appendChild(ul);
+  }
+  return li;
+}
+function render(){
+  const container = document.getElementById('tree');
+  container.innerHTML = '';
+  const ul = document.createElement('ul');
+  ul.appendChild(renderNode(root));
+  container.appendChild(ul);
+}
+
+/* initial draw – set default node size */
+document.documentElement.style.setProperty('--node-size','70px');
+render();
+</script>
+</body>
+</html>
