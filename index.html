@@ -2,53 +2,111 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Binary Tree Game – Zoom‑aware Nodes + Drag‑to‑Pan</title>
+<title>Binary Tree Game – Simple Version</title>
 <style>
-/* --------------------------------------------------------------
-   Page shell
-   -------------------------------------------------------------- */
-body{font-family:Arial,sans-serif;background:#0f172a;color:#e5e7eb;margin:0;}
-.container{display:flex;gap:20px;padding:20px;}
-.panel{background:#020617;padding:16px;border-radius:8px;width:320px;}
-button{margin:4px 0;padding:6px 12px;cursor:pointer;
-       background:#1e293b;color:#e5e7eb;border:none;border-radius:4px;}
-button:hover{background:#334155}
-input,select{width:100%;margin:6px 0;padding:6px;
-            background:#1e293b;color:#e5e7eb;border:none;border-radius:4px}
-.zoom-controls{display:flex;gap:8px;margin-bottom:10px}
-.tree-wrapper{
-  overflow:hidden;                 /* hide scrollbars – we pan instead */
-  transform-origin:top left;
-  transition:transform .2s ease;
-  cursor:grab;                    /* default cursor */
-  user-select:none;               /* avoid text selection while dragging */
+body{
+  font-family:'Segoe UI',Arial,sans-serif;
+  background:#0f172a;
+  color:#e5e7eb;
+  margin:0;
+  padding:20px;
+  display:flex;
+  gap:20px;
 }
-.tree-wrapper.grabbing{cursor:grabbing}
 
-/* --------------------------------------------------------------
-   Tree layout – flexbox (centred root)
-   -------------------------------------------------------------- */
+.panel{
+  background:#020617;
+  padding:20px;
+  border-radius:12px;
+  box-shadow:0 4px 6px rgba(0,0,0,0.3);
+}
+
+.left-panel{
+  width:300px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+.right-panel{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+h3{
+  margin:0 0 12px 0;
+  color:#22c55e;
+  font-size:18px;
+}
+
+input, select, button{
+  width:100%;
+  padding:10px;
+  margin:4px 0;
+  border:1px solid #334155;
+  border-radius:6px;
+  background:#1e293b;
+  color:#e5e7eb;
+  font-size:14px;
+  cursor:pointer;
+}
+
+button:hover{
+  background:#334155;
+  border-color:#22c55e;
+}
+
+.stats{
+  background:#1e293b;
+  padding:12px;
+  border-radius:8px;
+  font-size:14px;
+}
+
+.stat-row{
+  display:flex;
+  justify-content:space-between;
+  margin:8px 0;
+  padding:8px;
+  background:#0f172a;
+  border-radius:6px;
+}
+
+.stat-label{
+  color:#94a3b8;
+}
+
+.stat-value{
+  color:#22c55e;
+  font-weight:bold;
+}
+
+/* Tree Styles */
 .tree{
   display:flex;
   justify-content:center;
-  margin-top:30px;
+  margin:40px;
 }
+
 .tree ul{
   display:flex;
   justify-content:center;
   position:relative;
   padding-top:30px;
+  gap:10px;
+  list-style:none;
 }
+
 .tree li{
   display:flex;
   flex-direction:column;
   align-items:center;
-  list-style:none;
-  margin:0 12px;
   position:relative;
 }
 
-/* connector lines (unchanged) */
+/* Connector lines */
 .tree li::before,
 .tree li::after{
   content:"";
@@ -58,10 +116,17 @@ input,select{width:100%;margin:6px 0;padding:6px;
   height:15px;
   border-left:2px solid #64748b;
 }
-.tree li::before{ left:calc(50% - 1px); }
-.tree li::after{  right:calc(50% - 1px); }
+
+.tree li.active-branch::before,
+.tree li.active-branch::after{
+  border-color:#22c55e;
+}
+
+.tree li::before{left:calc(50% - 1px);}
+.tree li::after{right:calc(50% - 1px);}
 .tree li:only-child::before,
-.tree li:only-child::after{ display:none; }
+.tree li:only-child::after{display:none;}
+
 .tree ul::before{
   content:"";
   position:absolute;
@@ -72,154 +137,232 @@ input,select{width:100%;margin:6px 0;padding:6px;
   transform:translateX(-50%);
 }
 
-/* ---------- NODE STYLES – size driven by CSS variable ---------- */
-:root{--node-size:70px;}               /* default size */
+.tree ul.active-branch::before{
+  border-color:#22c55e;
+}
+
+/* Node */
 .node{
-  width:var(--node-size);
-  height:var(--node-size);
-  border-radius:50%;
+  width:100px;
+  min-height:100px;
+  border-radius:12px;
   border:2px solid #64748b;
-  background:#020617;
+  background:linear-gradient(135deg, #020617 0%, #1e293b 100%);
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  transition:all .4s ease, width .2s ease, height .2s ease;
-  position:relative;
+  transition:all .3s ease;
+  padding:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
 }
-.node.active   {background:#16a34a;}
-.node.selected {border:3px solid #22c55e;box-shadow:0 0 12px #22c55e;}
-.points{font-size:11px;margin-top:2px;}
-.tooltip{
-  position:absolute;bottom:-32px;background:#020617;border:1px solid #64748b;
-  padding:3px 6px;font-size:11px;border-radius:4px;display:none;white-space:nowrap;
+
+.node.active{
+  background:linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  border-color:#22c55e;
+  box-shadow:0 0 15px rgba(34,197,94,0.6);
 }
-.node:hover .tooltip{display:block;}
-.status{margin-top:12px;font-size:14px}
+
+.node.selected{
+  border:3px solid #fbbf24;
+  box-shadow:0 0 20px #fbbf24;
+}
+
+.node:hover{
+  transform:scale(1.05);
+}
+
+.node-name{
+  font-weight:bold;
+  font-size:14px;
+  margin-bottom:8px;
+}
+
+.node-info{
+  font-size:11px;
+  color:#e5e7eb;
+  text-align:center;
+  line-height:1.4;
+}
+
+.node-points{
+  font-size:16px;
+  font-weight:bold;
+  color:#fbbf24;
+  margin-top:4px;
+}
 </style>
 </head>
 <body>
 
-<div class="container">
-  <!-- LEFT PANEL – Controls -->
+<div class="left-panel">
+  <!-- Actions -->
   <div class="panel">
-    <h3>Actions</h3>
-    <input id="treeName" placeholder="Tree name" />
+    <h3>🎮 Actions</h3>
+    <input id="treeName" placeholder="Enter tree name" />
     <select id="mode">
-      <option value="single">Single</option>
-      <option value="triple">Triple</option>
-      <option value="vip">VIP</option>
+      <option value="single">Single Node</option>
+      <option value="triple">Triple (L+R+Node)</option>
+      <option value="vip">VIP (All Nodes)</option>
     </select>
-    <button onclick="addTree()">Transform To Tree</button>
-    <button onclick="activateNode()">Activate Node</button>
-    <button onclick="resetTree()">Reset Tree</button>
-    <p class="status">Selected Node: <strong id="selected">main</strong></p>
+    <button onclick="addTree()">🌳 Transform To Tree</button>
+    <button onclick="activateNode()">⚡ Activate Node</button>
+    <button onclick="resetTree()">🔄 Reset Tree</button>
+    <div style="margin-top:12px;padding:10px;background:#1e293b;border-radius:6px;">
+      Selected: <strong id="selected">main</strong>
+    </div>
   </div>
 
-  <!-- RIGHT PANEL – Tree view -->
-  <div class="panel" style="flex:1">
-    <h3>Tree</h3>
-    <div class="zoom-controls">
-      <button onclick="zoomIn()">＋</button>
-      <button onclick="zoomOut()">－</button>
-      <button onclick="resetZoom()">Reset</button>
+  <!-- Statistics -->
+  <div class="panel">
+    <h3>📊 Statistics</h3>
+    <div class="stats">
+      <div class="stat-row">
+        <span class="stat-label">Total Points:</span>
+        <span class="stat-value" id="totalPoints">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Active Nodes:</span>
+        <span class="stat-value" id="activeNodes">1</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Total Nodes:</span>
+        <span class="stat-value" id="totalNodes">1</span>
+      </div>
     </div>
-    <div id="treeWrapper" class="tree-wrapper">
-      <div id="tree" class="tree"></div>
+  </div>
+
+  <!-- Point Calculation Info -->
+  <div class="panel">
+    <h3>ℹ️ How Points Work</h3>
+    <div style="font-size:12px;line-height:1.6;color:#94a3b8;">
+      A node earns <strong style="color:#22c55e;">1 point</strong> when:
+      <ul style="margin:8px 0;padding-left:20px;">
+        <li>The node is <strong>active</strong></li>
+        <li>It has <strong>both</strong> left and right children</li>
+        <li><strong>Both</strong> children are active</li>
+      </ul>
+      Points accumulate from bottom to top!
     </div>
   </div>
 </div>
 
+<div class="right-panel panel">
+  <h3>🌲 Binary Tree</h3>
+  <div id="tree" class="tree"></div>
+</div>
+
 <script>
 /* ==============================================================
-   1️⃣  DATA MODEL & BASIC HELPERS
+   DATA MODEL
    ============================================================== */
 class TreeNode{
-  constructor(name,parent=null){
+  constructor(name, parent=null){
     this.name = name;
     this.active = false;
     this.left = null;
     this.right = null;
-    this.points = 0;               // total points (own + inherited)
-    this.ownPointGiven = false;    // have we already awarded this node its own point?
-    this.parent = parent;          // cached for fast upward walk
+    this.points = 0;
+    this.parent = parent;
   }
 }
-const root = new TreeNode('main');
-root.active = true;                // root starts active
-let selectedNode = root;
-let zoomLevel = 1;                 // 1 = 100%
-let panX = 0, panY = 0;            // current translate offsets
 
-/* ----- generic recursion ----- */
-function traverse(node,cb){
+let root = new TreeNode('main');
+root.active = true;
+let selectedNode = root;
+
+/* ==============================================================
+   HELPERS
+   ============================================================== */
+function traverse(node, cb){
   if(!node) return;
   cb(node);
-  traverse(node.left,cb);
-  traverse(node.right,cb);
+  traverse(node.left, cb);
+  traverse(node.right, cb);
 }
 
-/* ----- count active nodes inside a subtree (used for L / R tooltip) ----- */
-function countActive(node){
+function countNodes(node){
   if(!node) return 0;
-  let c = node.active ? 1 : 0;
-  c += countActive(node.left);
-  c += countActive(node.right);
-  return c;
+  return 1 + countNodes(node.left) + countNodes(node.right);
 }
 
-/* --------------------------------------------------------------
-   2️⃣  POINT LOGIC (unchanged from the previous answer)
-   -------------------------------------------------------------- */
-function hasActiveBothSides(node){
-  if(!node) return false;
-  const leftHas  = node.left  && countActive(node.left)  > 0;
-  const rightHas = node.right && countActive(node.right) > 0;
-  return leftHas && rightHas;
+function countActiveNodes(node){
+  if(!node) return 0;
+  const count = node.active ? 1 : 0;
+  return count + countActiveNodes(node.left) + countActiveNodes(node.right);
 }
-function awardPointAndPropagate(node){
-  node.points += 1;                // own point
-  let anc = node.parent;
-  while(anc && anc.active){
-    anc.points += 1;
-    anc = anc.parent;
-  }
+
+function getTotalNodes(){
+  let count = 0;
+  traverse(root, () => count++);
+  return count;
 }
-function activateNodeLogic(node){
-  if(!node || node.active) return;
-  node.active = true;
-  if(!node.ownPointGiven && hasActiveBothSides(node)){
-    node.ownPointGiven = true;
-    awardPointAndPropagate(node);
-  }
-  // ascend and see if any ancestor now qualifies
-  let anc = node.parent;
-  while(anc){
-    if(anc.active && !anc.ownPointGiven && hasActiveBothSides(anc)){
-      anc.ownPointGiven = true;
-      awardPointAndPropagate(anc);
+
+function getTotalPoints(){
+  let total = 0;
+  traverse(root, n => total += n.points);
+  return total;
+}
+
+function getActiveNodesCount(){
+  let count = 0;
+  traverse(root, n => {if(n.active) count++;});
+  return count;
+}
+
+/* ==============================================================
+   POINT CALCULATION - SIMPLE VERSION
+   Points are earned when:
+   1. Node is active
+   2. Node has both left AND right children
+   3. Both left AND right children are active
+   ============================================================== */
+function recalculateAllPoints(){
+  function calculateSubtreePoints(node){
+    if(!node) return 0;
+    
+    // Calculate points for children first (bottom-up)
+    const leftPoints = calculateSubtreePoints(node.left);
+    const rightPoints = calculateSubtreePoints(node.right);
+    
+    // Check if this node earns a point
+    let ownPoint = 0;
+    if(node.active && 
+       node.left && node.left.active && 
+       node.right && node.right.active){
+      ownPoint = 1;
     }
-    anc = anc.parent;
+    
+    // Total points = own point + all points from subtree
+    node.points = ownPoint + leftPoints + rightPoints;
+    
+    return node.points;
   }
+  
+  calculateSubtreePoints(root);
 }
 
-/* --------------------------------------------------------------
-   3️⃣  TREE BUILDING
-   -------------------------------------------------------------- */
-function buildChildren(node,name){
-  node.left  = new TreeNode(name,node);
-  node.right = new TreeNode(name,node);
-  node.left.left   = new TreeNode(name,node.left);
-  node.left.right  = new TreeNode(name,node.left);
-  node.right.left  = new TreeNode(name,node.right);
-  node.right.right = new TreeNode(name,node.right);
+function activateNodeLogic(node){
+  if(!node || node.active) return false;
+  node.active = true;
+  recalculateAllPoints();
+  return true;
 }
 
-/* --------------------------------------------------------------
-   4️⃣  MODE HANDLING
-   -------------------------------------------------------------- */
-function activateByMode(tree,mode){
+/* ==============================================================
+   TREE BUILDING
+   ============================================================== */
+function buildChildren(node, name){
+  node.left  = new TreeNode(name, node);
+  node.right = new TreeNode(name, node);
+  node.left.left   = new TreeNode(name, node.left);
+  node.left.right  = new TreeNode(name, node.left);
+  node.right.left  = new TreeNode(name, node.right);
+  node.right.right = new TreeNode(name, node.right);
+}
+
+function activateByMode(tree, mode){
   if(mode === 'single'){
     activateNodeLogic(tree);
   }else if(mode === 'triple'){
@@ -236,129 +379,101 @@ function activateByMode(tree,mode){
     })(tree);
     order.forEach(activateNodeLogic);
   }
+  
+  recalculateAllPoints();
 }
 
-/* --------------------------------------------------------------
-   5️⃣  UI CALLBACKS (buttons)
-   -------------------------------------------------------------- */
+/* ==============================================================
+   UI CALLBACKS
+   ============================================================== */
 function addTree(){
   const name = document.getElementById('treeName').value.trim();
   const mode = document.getElementById('mode').value;
-  if(!name){ alert('Please type a name'); return; }
+  if(!name){ 
+    alert('Please enter a tree name'); 
+    return; 
+  }
 
-  // clear old activation/point data on the branch we replace
   traverse(selectedNode, n => {
     n.active = false;
     n.points = 0;
-    n.ownPointGiven = false;
   });
 
   selectedNode.name = name;
   buildChildren(selectedNode, name);
   activateByMode(selectedNode, mode);
+  
   render();
+  updateStats();
 }
+
 function activateNode(){
-  activateNodeLogic(selectedNode);
-  render();
+  const wasActivated = activateNodeLogic(selectedNode);
+  if(wasActivated){
+    render();
+    updateStats();
+  }
 }
+
 function resetTree(){
-  if(!confirm('Reset the whole tree? All progress will be lost.')) return;
-  root.name = 'main';
+  if(!confirm('Reset the entire tree?')) return;
+  
+  root = new TreeNode('main');
   root.active = true;
-  root.points = 0;
-  root.ownPointGiven = false;
-  root.left = root.right = null;
   selectedNode = root;
+  
   document.getElementById('selected').innerText = root.name;
   render();
+  updateStats();
 }
 
-/* --------------------------------------------------------------
-   6️⃣  ZOOM & PAN
-   -------------------------------------------------------------- */
-function updateTransform(){
-  const wrapper = document.getElementById('treeWrapper');
-  wrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
-}
-function setZoom(v){
-  zoomLevel = v;
-  // shrink / enlarge the circles inversely to keep overall width stable
-  const baseSize = 70;                 // the size we used originally
-  const newSize = baseSize / zoomLevel;
-  document.documentElement.style.setProperty('--node-size', `${newSize}px`);
-  updateTransform();
-}
-function zoomIn(){ setZoom(zoomLevel + 0.1); }
-function zoomOut(){ setZoom(Math.max(0.4, zoomLevel - 0.1)); }
-function resetZoom(){ setZoom(1); }
-
-/* ---- drag‑to‑pan ---- */
-let isPanning = false, startX = 0, startY = 0;
-const wrapper = document.getElementById('treeWrapper');
-
-wrapper.addEventListener('mousedown', e => {
-  isPanning = true;
-  startX = e.clientX - panX;
-  startY = e.clientY - panY;
-  wrapper.classList.add('grabbing');
-});
-window.addEventListener('mousemove', e => {
-  if(!isPanning) return;
-  panX = e.clientX - startX;
-  panY = e.clientY - startY;
-  updateTransform();
-});
-window.addEventListener('mouseup', () => {
-  isPanning = false;
-  wrapper.classList.remove('grabbing');
-});
-window.addEventListener('mouseleave', () => {
-  isPanning = false;
-  wrapper.classList.remove('grabbing');
-});
-
-/* --------------------------------------------------------------
-   7️⃣  RENDERING
-   -------------------------------------------------------------- */
+/* ==============================================================
+   RENDERING
+   ============================================================== */
 function renderNode(node){
   const li = document.createElement('li');
+  if(node.active) li.classList.add('active-branch');
 
   const div = document.createElement('div');
   div.className = 'node' +
     (node.active ? ' active' : '') +
     (node === selectedNode ? ' selected' : '');
-  div.dataset.name = node.name;
+
+  // Count nodes in left and right subtrees
+  const leftTotal = countNodes(node.left);
+  const rightTotal = countNodes(node.right);
+  const leftActive = countActiveNodes(node.left);
+  const rightActive = countActiveNodes(node.right);
 
   div.innerHTML = `
-    <strong>${node.name}</strong>
-    <div class="points">⭐ ${node.points}</div>
+    <div class="node-name">${node.name}</div>
+    <div class="node-info">
+      L: ${leftActive}/${leftTotal} active<br>
+      R: ${rightActive}/${rightTotal} active
+    </div>
+    <div class="node-points">⭐ ${node.points} pts</div>
   `;
-
-  const leftCnt  = countActive(node.left);
-  const rightCnt = countActive(node.right);
-  const tooltip = document.createElement('div');
-  tooltip.className = 'tooltip';
-  tooltip.innerText = `L:${leftCnt} | R:${rightCnt}`;
-  div.appendChild(tooltip);
 
   div.onclick = e => {
     e.stopPropagation();
     selectedNode = node;
     document.getElementById('selected').innerText = node.name;
-    render();                     // redraw to highlight the selected node
+    render();
   };
 
   li.appendChild(div);
 
   if(node.left || node.right){
     const ul = document.createElement('ul');
-    if(node.left)  ul.appendChild(renderNode(node.left));
+    if(node.active) ul.classList.add('active-branch');
+    if(node.left) ul.appendChild(renderNode(node.left));
     if(node.right) ul.appendChild(renderNode(node.right));
     li.appendChild(ul);
   }
+  
   return li;
 }
+
 function render(){
   const container = document.getElementById('tree');
   container.innerHTML = '';
@@ -367,9 +482,17 @@ function render(){
   container.appendChild(ul);
 }
 
-/* initial draw – set default node size */
-document.documentElement.style.setProperty('--node-size','70px');
+function updateStats(){
+  document.getElementById('totalPoints').innerText = getTotalPoints();
+  document.getElementById('activeNodes').innerText = getActiveNodesCount();
+  document.getElementById('totalNodes').innerText = getTotalNodes();
+}
+
+/* ==============================================================
+   INITIALIZATION
+   ============================================================== */
 render();
+updateStats();
 </script>
 </body>
 </html>
