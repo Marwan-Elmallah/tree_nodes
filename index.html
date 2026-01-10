@@ -157,45 +157,15 @@ button:hover{
   padding:10px;
   box-shadow:0 2px 8px rgba(0,0,0,0.3);
 }
-
-.node.active{
-  background:linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
-  border-color:#22c55e;
-  box-shadow:0 0 15px rgba(34,197,94,0.6);
+.node.active   {background:#16a34a;}
+.node.selected {border:3px solid #22c55e;box-shadow:0 0 12px #22c55e;}
+.points{font-size:11px;margin-top:2px;}
+.tooltip{
+  position:absolute;bottom:-32px;background:#020617;border:1px solid #64748b;
+  padding:3px 6px;font-size:11px;border-radius:4px;display:none;white-space:nowrap;
 }
-
-.node.selected{
-  border:3px solid #fbbf24;
-  box-shadow:0 0 20px #fbbf24;
-}
-
-.node:hover{
-  transform:scale(1.05);
-}
-
-.node-name{
-  font-weight:bold;
-  font-size:14px;
-  margin-bottom:8px;
-}
-
-.node-info{
-  font-size:11px;
-  color:#e5e7eb;
-  text-align:center;
-  line-height:1.4;
-}
-
-.node-points{
-  font-size:16px;
-  font-weight:bold;
-  color:#fbbf24;
-  margin-top:4px;
-}
-.node-balanced {
-  border: 3px solid #22c55e;
-  box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
-}
+.node:hover .tooltip{display:block;}
+.status{margin-top:12px;font-size:14px}
 </style>
 </head>
 <body>
@@ -267,16 +237,13 @@ class TreeNode{
     this.active = false;
     this.left = null;
     this.right = null;
-    this.points = 0;
-    this.parent = parent;
-    this.activatedAt = null;
+    this.points = 0;               // total points (own + inherited)
+    this.ownPointGiven = false;    // have we already awarded this node its own point?
+    this.parent = parent;          // cached for fast upward walk
   }
 }
-
-
-
-let root = new TreeNode('main');
-root.active = true;
+const root = new TreeNode('main');
+root.active = true;                // root starts active
 let selectedNode = root;
 
 /* ==============================================================
@@ -296,84 +263,57 @@ function countNodes(node){
 
 function countActiveNodes(node){
   if(!node) return 0;
-  const count = node.active ? 1 : 0;
-  return count + countActiveNodes(node.left) + countActiveNodes(node.right);
+  let c = node.active ? 1 : 0;
+  c += countActive(node.left);
+  c += countActive(node.right);
+  return c;
 }
 
-function getTotalNodes(){
-  let count = 0;
-  traverse(root, () => count++);
-  return count;
+/* --------------------------------------------------------------
+   2️⃣  POINT LOGIC (unchanged from the previous answer)
+   -------------------------------------------------------------- */
+function hasActiveBothSides(node){
+  if(!node) return false;
+  const leftHas  = node.left  && countActive(node.left)  > 0;
+  const rightHas = node.right && countActive(node.right) > 0;
+  return leftHas && rightHas;
 }
-
-function getTotalPoints(){
-  if(!root) return 0;
-  // After recalculation, the root node holds the total score.
-  // Summing all nodes would double-count the points.
-  return root.points;
-}
-
-function getActiveNodesCount(){
-  let count = 0;
-  traverse(root, n => {if(n.active) count++;});
-  return count;
-}
-
-/* ==============================================================
-   POINT CALCULATION - FINAL VERSION
-   Rules:
-   1. INACTIVE nodes ALWAYS show 0 points (no accumulation)
-   2. ACTIVE nodes earn 1 OWN point if both children are ACTIVE
-   3. ACTIVE nodes accumulate points from their ACTIVE children only
-   ============================================================== */
-function recalculateAllPoints() {
-  function dfs(node) {
-    if (!node) return 0;
-
-    // Recurse first (bottom-up)
-    const leftPts = dfs(node.left);
-    const rightPts = dfs(node.right);
-
-    // If node is INACTIVE → force 0 points and contribute nothing upward
-    if (!node.active) {
-      node.points = 0;
-      return 0; // ⬅️ CRITICAL: block any child points from propagating up!
-    }
-
-    // Node is ACTIVE → calculate own point
-    let ownPoint = 0;
-    if (node.left && node.right && node.left.active && node.right.active) {
-      ownPoint = 1;
-    }
-
-    // Total = own + children's points (which are already filtered via DFS)
-    node.points = ownPoint + leftPts + rightPts;
-    return node.points;
+function awardPointAndPropagate(node){
+  node.points += 1;                // own point
+  let anc = node.parent;
+  while(anc && anc.active){
+    anc.points += 1;
+    anc = anc.parent;
   }
-
-  dfs(root);
 }
-
-
-
 function activateNodeLogic(node){
   if(!node || node.active) return false;
   node.active = true;
-  node.activatedAt = Date.now(); // ⬅️ وقت التفعيل
-  return true;
+  if(!node.ownPointGiven && hasActiveBothSides(node)){
+    node.ownPointGiven = true;
+    awardPointAndPropagate(node);
+  }
+  // ascend and see if any ancestor now qualifies
+  let anc = node.parent;
+  while(anc){
+    if(anc.active && !anc.ownPointGiven && hasActiveBothSides(anc)){
+      anc.ownPointGiven = true;
+      awardPointAndPropagate(anc);
+    }
+    anc = anc.parent;
+  }
 }
 
-
-/* ==============================================================
-   TREE BUILDING
-   ============================================================== */
-function buildChildren(node, name){
-  node.left  = new TreeNode(name, node);
-  node.right = new TreeNode(name, node);
-  node.left.left   = new TreeNode(name, node.left);
-  node.left.right  = new TreeNode(name, node.left);
-  node.right.left  = new TreeNode(name, node.right);
-  node.right.right = new TreeNode(name, node.right);
+/* --------------------------------------------------------------
+   3️⃣  TREE BUILDING
+   -------------------------------------------------------------- */
+function buildChildren(node,name){
+  node.left  = new TreeNode(name,node);
+  node.right = new TreeNode(name,node);
+  node.left.left   = new TreeNode(name,node.left);
+  node.left.right  = new TreeNode(name,node.left);
+  node.right.left  = new TreeNode(name,node.right);
+  node.right.right = new TreeNode(name,node.right);
 }
 
 function activateByMode(tree, mode){
@@ -393,7 +333,6 @@ function activateByMode(tree, mode){
     })(tree);
     order.forEach(activateNodeLogic);
   }
-  // NO recalculate here
 }
 
 /* ==============================================================
@@ -407,7 +346,7 @@ function addTree(){
     return; 
   }
 
-  // Deactivate entire subtree
+  // clear old activation/point data on the branch we replace
   traverse(selectedNode, n => {
     n.active = false;
     n.points = 0;
@@ -415,22 +354,14 @@ function addTree(){
 
   selectedNode.name = name;
   buildChildren(selectedNode, name);
-  activateByMode(selectedNode, mode); // Now only sets .active = true, no recalc
-  
-  recalculateAllPoints(); // ← Only ONE recalc after all activations
+  activateByMode(selectedNode, mode);
   render();
   updateStats();
 }
 
 function activateNode(){
-  const wasActivated = activateNodeLogic(selectedNode);
-  if(wasActivated){
-    recalculateAllPoints(); // Force recalculation
-    render();
-    updateStats();
-  } else {
-    alert('Node is already active!');
-  }
+  activateNodeLogic(selectedNode);
+  render();
 }
 
 function resetTree(){
@@ -488,13 +419,6 @@ function renderNode(node){
     if(node.right) ul.appendChild(renderNode(node.right));
     li.appendChild(ul);
   }
-
-  if (node.left && node.right && node.left.active && node.right.active) {
-  div.classList.add('node-balanced');
-} else {
-  div.classList.remove('node-balanced');
-}
-  
   return li;
 }
 
