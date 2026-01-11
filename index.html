@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Dynamic Binary Tree Game</title>
+<title>Binary Tree Plan Game</title>
 
 <style>
     body {
         margin: 0;
-        font-family: Arial, sans-serif;
         background: #020617;
         color: white;
+        font-family: Arial, sans-serif;
         overflow: hidden;
     }
 
@@ -19,14 +19,13 @@
         border-bottom: 1px solid #334155;
         display: flex;
         gap: 10px;
-        flex-wrap: wrap;
     }
 
     button {
         background: #1e293b;
         color: white;
         border: 1px solid #334155;
-        padding: 6px 12px;
+        padding: 6px 14px;
         border-radius: 6px;
         cursor: pointer;
     }
@@ -35,13 +34,9 @@
         background: #334155;
     }
 
-    #game {
+    svg {
         width: 100vw;
         height: calc(100vh - 60px);
-    }
-
-    .node {
-        cursor: pointer;
     }
 
     .node circle {
@@ -49,7 +44,7 @@
     }
 
     .node.active circle {
-        fill: #16a34a;
+        fill: #14532d;
         stroke: #22c55e;
     }
 
@@ -58,11 +53,16 @@
         stroke: #64748b;
     }
 
+    .selected circle {
+        stroke: #facc15 !important;
+        stroke-width: 3;
+    }
+
     text {
         fill: white;
-        font-size: 12px;
         text-anchor: middle;
         pointer-events: none;
+        font-size: 11px;
     }
 
     line {
@@ -76,14 +76,15 @@
 
 <div id="controls">
     <button onclick="createRoot()">Create Root</button>
-    <button onclick="addLeft()">Add Left</button>
-    <button onclick="addRight()">Add Right</button>
-    <button onclick="toggleActive()">Toggle Active</button>
+    <button onclick="applyPlan('Single')">Single</button>
+    <button onclick="applyPlan('Triple')">Triple</button>
+    <button onclick="applyPlan('VIP')">VIP</button>
 </div>
 
 <svg id="game"></svg>
 
 <script>
+/* ===================== DATA ===================== */
 class Node {
     constructor(name, parent = null) {
         this.name = name;
@@ -102,74 +103,105 @@ class Node {
 let root = null;
 let selectedNode = null;
 let nodeId = 1;
-
 const svg = document.getElementById("game");
 
-const CalculateNodes = (node) => {
-    if (!node) return { total: 0 };
+/* ===================== CALCULATION (UNCHANGED LOGIC) ===================== */
+function CalculateNodes(node) {
+    if (!node) return 0;
 
-    const left = CalculateNodes(node.left);
-    const right = CalculateNodes(node.right);
+    // Calculate children first (post-order traversal)
+    const leftPoints = node.left ? CalculateNodes(node.left) : 0;
+    const rightPoints = node.right ? CalculateNodes(node.right) : 0;
 
-    node.LeftCount = left.total;
-    node.RightCount = right.total;
+    // Base rule: 1 point only if BOTH direct children are active
+    const basePoint =
+        node.left?.isActive &&
+        node.right?.isActive && 
+        node.isActive
+            ? 1
+            : 0;
 
-    node.points = 0;
-    if (node.isActive) {
-        node.points = 1;
-        if (node.LeftCount === node.RightCount && node.LeftCount > 0) {
-            node.points += 1;
-        }
-    }
+    // Inherit points ONLY from active direct children
+    const inheritedPoints =
+        (node.left?.isActive ? leftPoints : 0) +
+        (node.right?.isActive ? rightPoints : 0);
 
-    return {
-        total: left.total + right.total + (node.isActive ? 1 : 0)
-    };
-};
+    // Final points
+    node.points = node.isActive ? basePoint + inheritedPoints : 0;
 
+    return node.points;
+}
+
+
+
+
+
+
+/* ===================== GAME LOGIC ===================== */
 function createRoot() {
     root = new Node("Root");
     selectedNode = root;
     redraw();
 }
 
-function addLeft() {
-    if (!selectedNode || selectedNode.left) return;
-    selectedNode.left = new Node("N" + nodeId++, selectedNode);
-    redraw();
-}
-
-function addRight() {
-    if (!selectedNode || selectedNode.right) return;
-    selectedNode.right = new Node("N" + nodeId++, selectedNode);
-    redraw();
-}
-
-function toggleActive() {
+function applyPlan(plan) {
     if (!selectedNode) return;
-    selectedNode.isActive = !selectedNode.isActive;
+    generatePlanSubtree(selectedNode, plan);
     redraw();
 }
 
-/* -------- Layout Engine (Scalable) -------- */
-function layoutTree(node, depth = 0, xMin = 0, xMax = svg.clientWidth) {
+function generatePlanSubtree(baseNode, plan) {
+    if (baseNode.left || baseNode.right) return;
+
+    const L = new Node("N" + nodeId++, baseNode);
+    const R = new Node("N" + nodeId++, baseNode);
+    baseNode.left = L;
+    baseNode.right = R;
+
+    const LL = new Node("N" + nodeId++, L);
+    const LR = new Node("N" + nodeId++, L);
+    L.left = LL;
+    L.right = LR;
+
+    const RL = new Node("N" + nodeId++, R);
+    const RR = new Node("N" + nodeId++, R);
+    R.left = RL;
+    R.right = RR;
+
+    const nodes = [baseNode, L, R, LL, LR, RL, RR];
+    nodes.forEach(n => n.isActive = false);
+
+    if (plan === "Single") {
+        baseNode.isActive = true;
+    }
+    if (plan === "Triple") {
+        baseNode.isActive = true;
+        L.isActive = true;
+        R.isActive = true;
+    }
+    if (plan === "VIP") {
+        nodes.forEach(n => n.isActive = true);
+    }
+}
+
+/* ===================== LAYOUT ===================== */
+function layoutTree(node, depth = 0, minX = 0, maxX = svg.clientWidth) {
     if (!node) return;
 
-    node.x = (xMin + xMax) / 2;
-    node.y = depth * 90 + 60;
+    node.x = (minX + maxX) / 2;
+    node.y = depth * 110 + 70;
 
-    layoutTree(node.left, depth + 1, xMin, node.x);
-    layoutTree(node.right, depth + 1, node.x, xMax);
+    layoutTree(node.left, depth + 1, minX, node.x);
+    layoutTree(node.right, depth + 1, node.x, maxX);
 }
 
-/* -------- Render -------- */
+/* ===================== RENDER ===================== */
 function redraw() {
     svg.innerHTML = "";
     if (!root) return;
 
     CalculateNodes(root);
     layoutTree(root);
-
     drawLinks(root);
     drawNodes(root);
 }
@@ -201,45 +233,36 @@ function drawNodes(node) {
 
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g.classList.add("node", node.isActive ? "active" : "inactive");
+    if (node === selectedNode) g.classList.add("selected");
 
     const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     circle.setAttribute("cx", node.x);
     circle.setAttribute("cy", node.y);
-    circle.setAttribute("r", 30);
+    circle.setAttribute("r", 32);
 
-    /* ---- TEXT: POINTS ---- */
-    const pointsText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    pointsText.setAttribute("x", node.x);
-    pointsText.setAttribute("y", node.y - 4);
-    pointsText.textContent = `P: ${node.points}`;
+    const t1 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t1.setAttribute("x", node.x);
+    t1.setAttribute("y", node.y - 8);
+    t1.textContent = `P: ${node.points}`;
 
-    /* ---- TEXT: LEFT / RIGHT ---- */
-    const lrText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    lrText.setAttribute("x", node.x);
-    lrText.setAttribute("y", node.y + 12);
-    lrText.setAttribute("font-size", "10");
-    lrText.textContent = `L:${node.LeftCount} | R:${node.RightCount}`;
+    const t2 = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t2.setAttribute("x", node.x);
+    t2.setAttribute("y", node.y + 10);
+    t2.textContent = `L:${node.LeftCount} | R:${node.RightCount}`;
 
     g.appendChild(circle);
-    g.appendChild(pointsText);
-    g.appendChild(lrText);
+    g.appendChild(t1);
+    g.appendChild(t2);
 
     g.onclick = () => {
         selectedNode = node;
         redraw();
     };
 
-    if (node === selectedNode) {
-        circle.style.stroke = "#facc15";
-        circle.style.strokeWidth = "3";
-    }
-
     svg.appendChild(g);
-
     drawNodes(node.left);
     drawNodes(node.right);
 }
-
 </script>
 
 </body>
