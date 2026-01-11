@@ -129,12 +129,20 @@ function CalculateNodes(node) {
     // Final points
     node.points = node.isActive ? basePoint + inheritedPoints : 0;
 
+    // ✅ CORRECT COUNTS: total active nodes in left and right SUBTREES
+    node.LeftCount = countActiveSubtree(node.left);
+    node.RightCount = countActiveSubtree(node.right);
+
     return node.points;
 }
 
-
-
-
+// Helper: count all active nodes in a subtree (including root of subtree)
+function countActiveSubtree(node) {
+    if (!node) return 0;
+    return (node.isActive ? 1 : 0) +
+           countActiveSubtree(node.left) +
+           countActiveSubtree(node.right);
+}
 
 
 /* ===================== GAME LOGIC ===================== */
