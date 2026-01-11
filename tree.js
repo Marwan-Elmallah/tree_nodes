@@ -36,34 +36,16 @@ const buildTree = (name, root, plan) => {
         case "Triple":
             root.isActive = true;
             newNode2.isActive = true;
-            // root.LeftCount = root.LeftCount + 1;
             newNode3.isActive = true;
-            // root.RightCount = root.RightCount + 1;
             break;
         case "VIP":
             root.isActive = true;
             newNode2.isActive = true;
-            // root.LeftCount = root.LeftCount + 1;
-
             newNode3.isActive = true;
-            // root.RightCount++;
-
             newNode4.isActive = true;
-            // newNode2.LeftCount = newNode2.LeftCount + 1;
-            // root.LeftCount = root.LeftCount + 1;
-
             newNode5.isActive = true;
-            // newNode2.RightCount++;
-            // root.LeftCount = root.LeftCount + 1;
-
             newNode6.isActive = true;
-            // newNode3.LeftCount = newNode3.LeftCount + 1;
-            // root.RightCount = root.RightCount + 1;
-
             newNode7.isActive = true;
-            // newNode3.RightCount = newNode3.RightCount + 1;
-            // root.RightCount = root.RightCount + 1;
-            break;
         default:
             break;
     }

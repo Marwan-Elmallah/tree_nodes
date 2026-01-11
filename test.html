@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Binary Tree Game – Simple Version</title>
+<style>
+body{
+  font-family:'Segoe UI',Arial,sans-serif;
+  background:#0f172a;
+  color:#e5e7eb;
+  margin:0;
+  padding:20px;
+  display:flex;
+  gap:20px;
+}
+
+.panel{
+  background:#020617;
+  padding:20px;
+  border-radius:12px;
+  box-shadow:0 4px 6px rgba(0,0,0,0.3);
+}
+
+.left-panel{
+  width:300px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+.right-panel{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+
+h3{
+  margin:0 0 12px 0;
+  color:#22c55e;
+  font-size:18px;
+}
+
+input, select, button{
+  width:100%;
+  padding:10px;
+  margin:4px 0;
+  border:1px solid #334155;
+  border-radius:6px;
+  background:#1e293b;
+  color:#e5e7eb;
+  font-size:14px;
+  cursor:pointer;
+}
+
+button:hover{
+  background:#334155;
+  border-color:#22c55e;
+}
+
+.stats{
+  background:#1e293b;
+  padding:12px;
+  border-radius:8px;
+  font-size:14px;
+}
+
+.stat-row{
+  display:flex;
+  justify-content:space-between;
+  margin:8px 0;
+  padding:8px;
+  background:#0f172a;
+  border-radius:6px;
+}
+
+.stat-label{
+  color:#94a3b8;
+}
+
+.stat-value{
+  color:#22c55e;
+  font-weight:bold;
+}
+
+/* Tree Styles */
+.tree{
+  display:flex;
+  justify-content:center;
+  margin:40px;
+}
+
+.tree ul{
+  display:flex;
+  justify-content:center;
+  position:relative;
+  padding-top:30px;
+  gap:10px;
+  list-style:none;
+}
+
+.tree li{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  position:relative;
+}
+
+/* Connector lines */
+.tree li::before,
+.tree li::after{
+  content:"";
+  position:absolute;
+  top:-15px;
+  width:0;
+  height:15px;
+  border-left:2px solid #64748b;
+}
+
+.tree li.active-branch::before,
+.tree li.active-branch::after{
+  border-color:#22c55e;
+}
+
+.tree li::before{left:calc(50% - 1px);}
+.tree li::after{right:calc(50% - 1px);}
+.tree li:only-child::before,
+.tree li:only-child::after{display:none;}
+
+.tree ul::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:50%;
+  width:calc(100% - 24px);
+  border-top:2px solid #64748b;
+  transform:translateX(-50%);
+}
+
+.tree ul.active-branch::before{
+  border-color:#22c55e;
+}
+
+/* Node */
+.node{
+  width:100px;
+  min-height:100px;
+  border-radius:12px;
+  border:2px solid #64748b;
+  background:linear-gradient(135deg, #020617 0%, #1e293b 100%);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:all .3s ease;
+  padding:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
+}
+.node.active   {background:#16a34a;}
+.node.selected {border:3px solid #22c55e;box-shadow:0 0 12px #22c55e;}
+.points{font-size:11px;margin-top:2px;}
+.tooltip{
+  position:absolute;bottom:-32px;background:#020617;border:1px solid #64748b;
+  padding:3px 6px;font-size:11px;border-radius:4px;display:none;white-space:nowrap;
+}
+.node:hover .tooltip{display:block;}
+.status{margin-top:12px;font-size:14px}
+</style>
+</head>
+<body>
+
+<div class="left-panel">
+  <!-- Actions -->
+  <div class="panel">
+    <h3>🎮 Actions</h3>
+    <input id="treeName" placeholder="Enter tree name" />
+    <select id="mode">
+      <option value="single">Single Node</option>
+      <option value="triple">Triple (L+R+Node)</option>
+      <option value="vip">VIP (All Nodes)</option>
+    </select>
+    <button onclick="addTree()">🌳 Transform To Tree</button>
+    <button onclick="activateNode()">⚡ Activate Node</button>
+    <button onclick="resetTree()">🔄 Reset Tree</button>
+    <div style="margin-top:12px;padding:10px;background:#1e293b;border-radius:6px;">
+      Selected: <strong id="selected">main</strong>
+    </div>
+  </div>
+
+  <!-- Statistics -->
+  <div class="panel">
+    <h3>📊 Statistics</h3>
+    <div class="stats">
+      <div class="stat-row">
+        <span class="stat-label">Total Points:</span>
+        <span class="stat-value" id="totalPoints">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Active Nodes:</span>
+        <span class="stat-value" id="activeNodes">1</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Total Nodes:</span>
+        <span class="stat-value" id="totalNodes">1</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Point Calculation Info -->
+  <div class="panel">
+    <h3>ℹ️ How Points Work</h3>
+    <div style="font-size:12px;line-height:1.6;color:#94a3b8;">
+      A node earns <strong style="color:#22c55e;">1 point</strong> when:
+      <ul style="margin:8px 0;padding-left:20px;">
+        <li>The node is <strong>active</strong></li>
+        <li>It has <strong>both</strong> left and right children</li>
+        <li><strong>Both</strong> children are active</li>
+      </ul>
+      Points accumulate from bottom to top!
+    </div>
+  </div>
+</div>
+
+<div class="right-panel panel">
+  <h3>🌲 Binary Tree</h3>
+  <div id="tree" class="tree"></div>
+</div>
+
+<script>
+/* ==============================================================
+   DATA MODEL
+   ============================================================== */
+class TreeNode{
+  constructor(name, parent=null){
+    this.name = name;
+    this.active = false;
+    this.left = null;
+    this.right = null;
+    this.points = 0;               // total points (own + inherited)
+    this.ownPointGiven = false;    // have we already awarded this node its own point?
+    this.parent = parent;          // cached for fast upward walk
+  }
+}
+const root = new TreeNode('main');
+root.active = true;                // root starts active
+let selectedNode = root;
+
+/* ==============================================================
+   HELPERS
+   ============================================================== */
+function traverse(node, cb){
+  if(!node) return;
+  cb(node);
+  traverse(node.left, cb);
+  traverse(node.right, cb);
+}
+
+function countNodes(node){
+  if(!node) return 0;
+  return 1 + countNodes(node.left) + countNodes(node.right);
+}
+
+function countActiveNodes(node){
+  if(!node) return 0;
+  let c = node.active ? 1 : 0;
+  c += countActive(node.left);
+  c += countActive(node.right);
+  return c;
+}
+
+/* --------------------------------------------------------------
+   2️⃣  POINT LOGIC (unchanged from the previous answer)
+   -------------------------------------------------------------- */
+function hasActiveBothSides(node){
+  if(!node) return false;
+  const leftHas  = node.left  && countActive(node.left)  > 0;
+  const rightHas = node.right && countActive(node.right) > 0;
+  return leftHas && rightHas;
+}
+function awardPointAndPropagate(node){
+  node.points += 1;                // own point
+  let anc = node.parent;
+  while(anc && anc.active){
+    anc.points += 1;
+    anc = anc.parent;
+  }
+}
+function activateNodeLogic(node){
+  if(!node || node.active) return false;
+  node.active = true;
+  if(!node.ownPointGiven && hasActiveBothSides(node)){
+    node.ownPointGiven = true;
+    awardPointAndPropagate(node);
+  }
+  // ascend and see if any ancestor now qualifies
+  let anc = node.parent;
+  while(anc){
+    if(anc.active && !anc.ownPointGiven && hasActiveBothSides(anc)){
+      anc.ownPointGiven = true;
+      awardPointAndPropagate(anc);
+    }
+    anc = anc.parent;
+  }
+}
+
+/* --------------------------------------------------------------
+   3️⃣  TREE BUILDING
+   -------------------------------------------------------------- */
+function buildChildren(node,name){
+  node.left  = new TreeNode(name,node);
+  node.right = new TreeNode(name,node);
+  node.left.left   = new TreeNode(name,node.left);
+  node.left.right  = new TreeNode(name,node.left);
+  node.right.left  = new TreeNode(name,node.right);
+  node.right.right = new TreeNode(name,node.right);
+}
+
+function activateByMode(tree, mode){
+  if(mode === 'single'){
+    activateNodeLogic(tree);
+  }else if(mode === 'triple'){
+    activateNodeLogic(tree.left);
+    activateNodeLogic(tree.right);
+    activateNodeLogic(tree);
+  }else if(mode === 'vip'){
+    const order = [];
+    (function dfs(n){
+      if(!n) return;
+      dfs(n.left);
+      dfs(n.right);
+      order.push(n);
+    })(tree);
+    order.forEach(activateNodeLogic);
+  }
+}
+
+/* ==============================================================
+   UI CALLBACKS
+   ============================================================== */
+function addTree(){
+  const name = document.getElementById('treeName').value.trim();
+  const mode = document.getElementById('mode').value;
+  if(!name){ 
+    alert('Please enter a tree name'); 
+    return; 
+  }
+
+  // clear old activation/point data on the branch we replace
+  traverse(selectedNode, n => {
+    n.active = false;
+    n.points = 0;
+  });
+
+  selectedNode.name = name;
+  buildChildren(selectedNode, name);
+  activateByMode(selectedNode, mode);
+  render();
+  updateStats();
+}
+
+function activateNode(){
+  activateNodeLogic(selectedNode);
+  render();
+}
+
+function resetTree(){
+  if(!confirm('Reset the entire tree?')) return;
+  
+  root = new TreeNode('main');
+  root.active = true;
+  selectedNode = root;
+  
+  document.getElementById('selected').innerText = root.name;
+  render();
+  updateStats();
+}
+
+/* ==============================================================
+   RENDERING
+   ============================================================== */
+function renderNode(node){
+  const li = document.createElement('li');
+  if(node.active) li.classList.add('active-branch');
+
+  const div = document.createElement('div');
+  div.className = 'node' +
+    (node.active ? ' active' : '') +
+    (node === selectedNode ? ' selected' : '');
+
+  // Count nodes in left and right subtrees
+  const leftTotal = countNodes(node.left);
+  const rightTotal = countNodes(node.right);
+  const leftActive = countActiveNodes(node.left);
+  const rightActive = countActiveNodes(node.right);
+
+  div.innerHTML = `
+    <div class="node-name">${node.name}</div>
+    <div class="node-info">
+      L: ${leftActive}/${leftTotal} active<br>
+      R: ${rightActive}/${rightTotal} active
+    </div>
+    <div class="node-points">⭐ ${node.points} pts</div>
+  `;
+
+  div.onclick = e => {
+    e.stopPropagation();
+    selectedNode = node;
+    document.getElementById('selected').innerText = node.name;
+    render();
+  };
+
+  li.appendChild(div);
+
+  if(node.left || node.right){
+    const ul = document.createElement('ul');
+    if(node.active) ul.classList.add('active-branch');
+    if(node.left) ul.appendChild(renderNode(node.left));
+    if(node.right) ul.appendChild(renderNode(node.right));
+    li.appendChild(ul);
+  }
+  return li;
+}
+
+function render(){
+  const container = document.getElementById('tree');
+  container.innerHTML = '';
+  const ul = document.createElement('ul');
+  ul.appendChild(renderNode(root));
+  container.appendChild(ul);
+}
+
+function updateStats(){
+  document.getElementById('totalPoints').innerText = getTotalPoints();
+  document.getElementById('activeNodes').innerText = getActiveNodesCount();
+  document.getElementById('totalNodes').innerText = getTotalNodes();
+}
+
+/* ==============================================================
+   INITIALIZATION
+   ============================================================== */
+render();
+updateStats();
+</script>
+</body>
+</html>
